@@ -1,0 +1,2 @@
+Date		Start	Stop	Activity 	Comments
+14/09/18	17:00	17:45	Planning	Read through spec, systematically go through reference implementation and figure out correct output in each situation
