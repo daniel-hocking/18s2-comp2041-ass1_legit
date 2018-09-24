@@ -15,7 +15,11 @@ if($#ARGV == -1) {
 # If first argument doesnt match valid command then show usage and exit
 my $cmd = shift @ARGV;
 if(::valid_commands($cmd) == 0) {
+  if(length $cmd > 0) {
+    print STDERR "$script_name: error: unknown command $cmd \n";
+  }
   ::show_usage();
+  exit 1;
 }
 
 if($cmd eq "init") {
@@ -35,7 +39,7 @@ if($cmd eq "show") {
 }
 
 sub show_usage {
-  print STDERR "Usage: legit.pl <command> [<args>]
+  print STDERR "Usage: $script_name <command> [<args>]
 
 These are the legit commands:
    init       Create an empty legit repository
@@ -48,6 +52,7 @@ These are the legit commands:
    branch     list, create or delete a branch
    checkout   Switch branches or restore current directory files
    merge      Join two development histories together
+
 ";
   exit 1;
 }
@@ -229,6 +234,10 @@ sub log_command {
   
   open my $f, "<", $commit_loc or (print STDERR "$script_name: error: could not open commits file to show commit message\n" and exit 1);
   my @lines = <$f>;
+  if($#lines == -1) {
+    print STDERR "$script_name: error: your repository does not have any commits yet\n";
+    exit 1;
+  }
   foreach my $line (reverse @lines) {
     chomp $line;
     if($line) {
@@ -245,6 +254,13 @@ sub show_command {
     exit 1;
   }
   
+  # Load current index into hash
+  my ($commit_num, %index) = ::load_index();
+  if($commit_num == 0) {
+    print STDERR "$script_name: error: your repository does not have any commits yet\n";
+    exit 1;
+  }
+  
   # Check if correct arguments were provided
   if($#ARGV != 0) {
     print STDERR "usage: $script_name show <commit>:<filename>\n";
@@ -256,8 +272,7 @@ sub show_command {
   if($to_show =~ /([^:]*):(.*)/) {
     my $commit = $1;
     my $filename = $2;
-    # Load current index into hash
-    my ($commit_num, %index) = ::load_index();
+    
     # Check commit valid if not empty
     if(length $commit > 0) {
       if($commit =~ /.*[^0-9].*/ || $commit < 0 || $commit > $commit_num) {
