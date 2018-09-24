@@ -4,8 +4,7 @@ use File::Copy;
 use File::Compare;
 
 # Setup a script name without ./
-$script_name = $0;
-$script_name =~ s/\.\///;
+$script_name = "legit.pl";
 # Location of files
 $index_loc = ".legit/index";
 $commit_loc = ".legit/commits";
@@ -30,6 +29,9 @@ if($cmd eq "commit") {
 }
 if($cmd eq "log") {
   ::log_command();
+}
+if($cmd eq "show") {
+  ::show_command();
 }
 
 sub show_usage {
@@ -57,6 +59,7 @@ sub valid_commands {
     "add" => 1,
     "commit" => 1,
     "log" => 1,
+    "show" => 1,
   );
   return defined $commands{$cmd} ? $commands{$cmd} : 0;
 }
@@ -70,7 +73,7 @@ sub load_index {
   my %index = ();
   foreach my $line (@index_lines) {
     chomp $line;
-    if($line =~ /(.+):(.+):(.+)/) {
+    if($line =~ /(.+):(.+):(.*)/) {
       @{$index{$1}} = ($2, $3);
     }
   }
@@ -88,6 +91,15 @@ sub save_index {
     print $f "$line:$col_2:$col_3\n";
   }
   close $f;
+}
+
+sub validate_filename {
+  my ($file) = @_;
+  
+  if(!($file =~ /^[a-z0-9]/i && $file =~ /^[a-z0-9\-_\.]+$/i)) {
+    print STDERR "$script_name: error: invalid filename '$file'\n";
+    exit 1;
+  }
 }
 
 sub init_command {
@@ -136,18 +148,15 @@ You are not required to detect this error or produce this error message.\n";
   # Add new files to hash (this will remove dupes)
   foreach my $file (@ARGV) {
     # Check file has invalid chars
-    if(!($file =~ /^[a-z0-9]/i && $file =~ /^[a-z0-9\-_\.]+$/i)) {
-      print STDERR "$script_name: error: invalid filename '$file'\n";
-      exit 1;
-    }
+    ::validate_filename($file);
     # Check if the file exists
     if( ! -f $file) {
       print STDERR "$script_name: error: can not open '$file'\n";
       exit 1;
     }
-    
+
     if(! defined $index{$file}) {
-      @{$index{$file}} = ($commit_num, -1);
+      @{$index{$file}} = ($commit_num, "-1");
     }
     @{$index{$file}}[0] = $commit_num;
   }
@@ -161,8 +170,9 @@ You are not required to detect this error or produce this error message.\n";
   }
   foreach my $line (keys %index) {
     if(@{$index{$line}}[0] == $commit_num) {
-      my $prev_commit = @{$index{$line}}[1];
-      if($prev_commit == -1 || compare($line, "$legit_dir/$prev_commit/$line") != 0) {
+      my @prev_commits = split(/,/, @{$index{$line}}[1]);
+      my $prev_commit = pop @prev_commits;
+      if(! defined $prev_commit || compare($line, "$legit_dir/$prev_commit/$line") != 0) {
         copy $line, "$commit_dir/$line";
       }
     }
@@ -189,11 +199,11 @@ sub commit_command {
   # Iterate through index files, if file has been added and has changed then commit
   foreach my $file (keys %index) {
     if(@{$index{$file}}[0] == $commit_num && -f "$commit_dir/$file") {
-      @{$index{$file}}[1] = $commit_num;
+      @{$index{$file}}[1] .= ",$commit_num";
       $changes_made = 1;
     }
   }
-  
+
   if($changes_made == 1) {
     # Add message to commits
     my $commit_message = $ARGV[1];
@@ -206,7 +216,7 @@ sub commit_command {
     $commit_num++;
     ::save_index($commit_num, %index);
   } else {
-    print "Nothing to commit\n";
+    print "nothing to commit\n";
   }
 }
 
@@ -226,5 +236,80 @@ sub log_command {
     }
   }
   close $f;
+}
+
+sub show_command {
+  # Check have init'd repository
+  if( ! -f $index_loc) {
+    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
+    exit 1;
+  }
+  
+  # Check if correct arguments were provided
+  if($#ARGV != 0) {
+    print STDERR "usage: $script_name show <commit>:<filename>\n";
+    exit 1;
+  }
+  
+  # Split argument into parts and check if correct parts were given
+  my $to_show = shift @ARGV;
+  if($to_show =~ /([^:]*):(.*)/) {
+    my $commit = $1;
+    my $filename = $2;
+    # Load current index into hash
+    my ($commit_num, %index) = ::load_index();
+    # Check commit valid if not empty
+    if(length $commit > 0) {
+      if($commit =~ /.*[^0-9].*/ || $commit < 0 || $commit > $commit_num) {
+        print STDERR "$script_name: error: unknown commit '$commit'\n";
+        exit 1;
+      }
+    }
+    # Check filename is valid
+    ::validate_filename($filename);
+    # Check filename is in index
+    if( ! defined $index{$filename}) {
+      if(length $commit > 0) {
+        print STDERR "$script_name: error: '$filename' not found in commit $commit\n";
+      } else {
+        print STDERR "$script_name: error: '$filename' not found in index\n";
+      }
+      exit 1;
+    } else {
+      # Print contents of the file
+      if(length $commit > 0) {
+        if($commit >= @{$index{$filename}}[0]) {
+          $commit = @{$index{$filename}}[0];
+        } else {
+          @possible_commits = split(/,/, @{$index{$filename}}[1]);
+          my $prev_commit;
+          shift @possible_commits;
+          while(my $possible_commit = shift @possible_commits) {
+            if($commit < $possible_commit) {
+              if(! defined $prev_commit) {
+                print STDERR "$script_name: error: '$filename' not found in commit $commit\n";
+                exit 1;
+              } else {
+                $commit = $prev_commit;
+                last;
+              }
+            } elsif($commit == $possible_commit) {
+              last;
+            }
+            $prev_commit = $possible_commit;
+          }
+        }
+      } else {
+        $commit = @{$index{$filename}}[0];
+      }
+      my $commit_dir = ".legit/$commit";
+      open my $f, "<", "$commit_dir/$filename" or (print STDERR "$script_name: error: could not open file $filename to show contents\n" and exit 1);
+      print <$f>;
+      close $f;
+    }
+  } else {
+    print STDERR "$script_name: error: invalid object $to_show\n";
+    exit 1;
+  }
 }
 
