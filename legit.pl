@@ -1,13 +1,14 @@
 #!/usr/bin/perl -w
 
 use File::Copy;
+use File::Compare;
 
 # Setup a script name without ./
 $script_name = $0;
 $script_name =~ s/\.\///;
 # Location of files
 $index_loc = ".legit/index";
-#$commit_loc = ".legit/commits";
+$commit_loc = ".legit/commits";
 # If no arguments then show usage and exit
 if($#ARGV == -1) {
   ::show_usage();
@@ -25,7 +26,10 @@ if($cmd eq "add") {
   ::add_command();
 }
 if($cmd eq "commit") {
-  ::add_command();
+  ::commit_command();
+}
+if($cmd eq "log") {
+  ::log_command();
 }
 
 sub show_usage {
@@ -52,6 +56,7 @@ sub valid_commands {
     "init"  => 1,
     "add" => 1,
     "commit" => 1,
+    "log" => 1,
   );
   return defined $commands{$cmd} ? $commands{$cmd} : 0;
 }
@@ -70,6 +75,19 @@ sub load_index {
     }
   }
   return ($commit_num, %index);
+}
+
+sub save_index {
+  my ($commit_num, %index) = @_;
+  
+  open my $f, ">", $index_loc or (print STDERR "$script_name: error: no .legit directory containing legit repository exists\n" and exit 1);
+  print $f "$commit_num\n";
+  foreach my $line (keys %index) {
+    my $col_2 = @{$index{$line}}[0];
+    my $col_3 = @{$index{$line}}[1];
+    print $f "$line:$col_2:$col_3\n";
+  }
+  close $f;
 }
 
 sub init_command {
@@ -129,32 +147,84 @@ You are not required to detect this error or produce this error message.\n";
     }
     
     if(! defined $index{$file}) {
-      @{$index{$file}} = (0, -1);
+      @{$index{$file}} = ($commit_num, -1);
     }
     @{$index{$file}}[0] = $commit_num;
   }
   
-  # Write the hash to index
-  open $f, ">", $index_loc or (print STDERR "$script_name: error: no .legit directory containing legit repository exists\n" and exit 1);
-  print $f "$commit_num\n";
-  foreach my $line (keys %index) {
-    my $col_2 = @{$index{$line}}[0];
-    my $col_3 = @{$index{$line}}[1];
-    print $f "$line:$col_2:$col_3\n";
+  # Write the hash to index, also copy files into staging area
+  ::save_index($commit_num, %index);
+  my $legit_dir = ".legit";
+  my $commit_dir = "$legit_dir/$commit_num";
+  if( ! -d $commit_dir) {
+    mkdir $commit_dir or (print STDERR "$script_name: error: could not create commit folder\n" and exit 1);
   }
-  close $f;
+  foreach my $line (keys %index) {
+    if(@{$index{$line}}[0] == $commit_num) {
+      my $prev_commit = @{$index{$line}}[1];
+      if($prev_commit == -1 || compare($line, "$legit_dir/$prev_commit/$line") != 0) {
+        copy $line, "$commit_dir/$line";
+      }
+    }
+  }
 }
 
 sub commit_command {
   # Check if index and commits files exist
+  if( ! -f $index_loc) {
+    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
+    exit 1;
+  }
   
   # Check if correct arguments were provided
+  if($#ARGV != 1 || $ARGV[0] ne '-m' && $ARGV[1] =~ /^[^-]/) {
+    print STDERR "usage: $script_name commit [-a] -m commit-message\n";
+    exit 1;
+  }
   
   # Load current index into hash
   my ($commit_num, %index) = ::load_index();
+  my $commit_dir = ".legit/$commit_num";
+  my $changes_made = 0;
+  # Iterate through index files, if file has been added and has changed then commit
+  foreach my $file (keys %index) {
+    if(@{$index{$file}}[0] == $commit_num && -f "$commit_dir/$file") {
+      @{$index{$file}}[1] = $commit_num;
+      $changes_made = 1;
+    }
+  }
   
-  # Iterate through index files, if file has been added and exists and has changed then copy into new directory
+  if($changes_made == 1) {
+    # Add message to commits
+    my $commit_message = $ARGV[1];
+    open my $f, ">>", $commit_loc or (print STDERR "$script_name: error: could not open commits file to save commit message\n" and exit 1);
+    print $f "$commit_num $commit_message\n";
+    close $f;
+    
+    print "Committed as commit $commit_num\n";
+    # Update index
+    $commit_num++;
+    ::save_index($commit_num, %index);
+  } else {
+    print "Nothing to commit\n";
+  }
+}
+
+sub log_command {
+  # Check have init'd repository
+  if( ! -f $index_loc) {
+    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
+    exit 1;
+  }
   
-  # Add message to commits
+  open my $f, "<", $commit_loc or (print STDERR "$script_name: error: could not open commits file to show commit message\n" and exit 1);
+  my @lines = <$f>;
+  foreach my $line (reverse @lines) {
+    chomp $line;
+    if($line) {
+      print "$line\n";
+    }
+  }
+  close $f;
 }
 

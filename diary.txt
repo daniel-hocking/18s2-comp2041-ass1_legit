@@ -2,3 +2,4 @@ Date		Start	Stop	Activity 	Comments
 14/09/18	17:00	17:45	Planning	Read through spec, systematically go through reference implementation and figure out correct output in each situation
 15/09/18  16:00 17:30 Coding    Implement usage and init command, implement error checking for add command and think about how to implement rest of command
 15/09/18  20:30 21:45 Coding    Finish implementation of add command, some refactoring, start to implement commit command
+24/09/18  10:00 11:45 Coding    Make some changes to add command, some refactoring (save_index), implement commit and log commands 
