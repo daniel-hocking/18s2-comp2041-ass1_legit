@@ -78,8 +78,8 @@ sub load_index {
   my %index = ();
   foreach my $line (@index_lines) {
     chomp $line;
-    if($line =~ /(.+):(.+):(.*)/) {
-      @{$index{$1}} = ($2, $3);
+    if($line =~ /(.+):(.+):(.+):(.*)/) {
+      @{$index{$1}} = ($2, $3, $4);
     }
   }
   return ($commit_num, %index);
@@ -93,7 +93,8 @@ sub save_index {
   foreach my $line (keys %index) {
     my $col_2 = @{$index{$line}}[0];
     my $col_3 = @{$index{$line}}[1];
-    print $f "$line:$col_2:$col_3\n";
+    my $col_4 = @{$index{$line}}[2];
+    print $f "$line:$col_2:$col_3:$col_4\n";
   }
   close $f;
 }
@@ -152,18 +153,33 @@ You are not required to detect this error or produce this error message.\n";
   # Check if all files valid
   # Add new files to hash (this will remove dupes)
   foreach my $file (@ARGV) {
-    # Check file has invalid chars
-    ::validate_filename($file);
-    # Check if the file exists
-    if( ! -f $file) {
-      print STDERR "$script_name: error: can not open '$file'\n";
+    if($file =~ /^-/) {
+      print STDERR "usage: $script_name add <filenames>\n";
       exit 1;
     }
-
+    # Check file has invalid chars
+    ::validate_filename($file);
     if(! defined $index{$file}) {
-      @{$index{$file}} = ($commit_num, "-1");
+      # Check if the file exists
+      if( ! -f $file) {
+        print STDERR "$script_name: error: can not open '$file'\n";
+        exit 1;
+      }
+      @{$index{$file}} = ($commit_num, "-1", "-1");
+    } else {
+      # If file doesn't exist then this must be a delete operation
+      if( ! -f $file) {
+        # Check if the file has been committed yet or just added to index
+        @commits = split(/,/, @{$index{$file}}[1]);
+        if($#commits > 0) {
+          @{$index{$file}}[0] = -$commit_num;
+        } else {
+          delete $index{$file};
+        }
+      } else {
+        @{$index{$file}}[0] = $commit_num;
+      }
     }
-    @{$index{$file}}[0] = $commit_num;
   }
   
   # Write the hash to index, also copy files into staging area
@@ -192,7 +208,7 @@ sub commit_command {
   }
   
   # Check if correct arguments were provided
-  if($#ARGV != 1 || $ARGV[0] ne '-m' && $ARGV[1] =~ /^[^-]/) {
+  if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/) {
     print STDERR "usage: $script_name commit [-a] -m commit-message\n";
     exit 1;
   }
@@ -205,6 +221,10 @@ sub commit_command {
   foreach my $file (keys %index) {
     if(@{$index{$file}}[0] == $commit_num && -f "$commit_dir/$file") {
       @{$index{$file}}[1] .= ",$commit_num";
+      $changes_made = 1;
+    }
+    if($commit_num > 0 && @{$index{$file}}[0] == -$commit_num) {
+      @{$index{$file}}[2] .= ",$commit_num";
       $changes_made = 1;
     }
   }
@@ -291,31 +311,47 @@ sub show_command {
       }
       exit 1;
     } else {
+      my $prev_commit;
+      my $original_commit = $commit;
       # Print contents of the file
       if(length $commit > 0) {
-        if($commit >= @{$index{$filename}}[0]) {
-          $commit = @{$index{$filename}}[0];
-        } else {
-          @possible_commits = split(/,/, @{$index{$filename}}[1]);
-          my $prev_commit;
+        if($commit != @{$index{$filename}}[0]) {
+          #my $prev_commit;
+          my @possible_commits = split(/,/, @{$index{$filename}}[1]);
           shift @possible_commits;
-          while(my $possible_commit = shift @possible_commits) {
+          while(defined(my $possible_commit = shift @possible_commits)) {
             if($commit < $possible_commit) {
               if(! defined $prev_commit) {
-                print STDERR "$script_name: error: '$filename' not found in commit $commit\n";
+                print STDERR "$script_name: error: '$filename' not found in commit $original_commit\n";
                 exit 1;
               } else {
                 $commit = $prev_commit;
                 last;
               }
             } elsif($commit == $possible_commit) {
+              $prev_commit = $possible_commit;
               last;
             }
             $prev_commit = $possible_commit;
           }
+          if(defined($prev_commit) && $commit > $prev_commit) {
+            $commit = $prev_commit;
+          }
+          
+          my @remove_commits = split(/,/, @{$index{$filename}}[2]);
+          shift @remove_commits;
+          while(my $remove_commit = shift @remove_commits) {
+            if(($remove_commit == $original_commit) || ($remove_commit < $original_commit && $commit < $remove_commit)) {
+              print STDERR "$script_name: error: '$filename' not found in commit $original_commit\n";
+              exit 1;
+            }
+          }
         }
-      } else {
+      } elsif(@{$index{$filename}}[0] >= 0) {
         $commit = @{$index{$filename}}[0];
+      } else {
+        print STDERR "$script_name: error: '$filename' not found in index\n";
+        exit 1;
       }
       my $commit_dir = ".legit/$commit";
       open my $f, "<", "$commit_dir/$filename" or (print STDERR "$script_name: error: could not open file $filename to show contents\n" and exit 1);

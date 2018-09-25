@@ -1,3 +1,4 @@
+# Test to show very basic error messages show at correct times
 legit.pl
 legit.pl abc
 legit.pl a b c d
@@ -15,4 +16,5 @@ legit.pl init
 legit.pl init
 legit.pl log
 legit.pl show
+legit.pl commit
 legit.pl commit -m abc

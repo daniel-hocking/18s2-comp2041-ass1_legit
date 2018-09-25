@@ -5,3 +5,4 @@ Date		Start	Stop	Activity 	Comments
 24/09/18  10:00 11:45 Coding    Make some changes to add command, some refactoring (save_index), implement commit and log commands
 24/09/18  14:00 18:00 Coding    Implement the show command and make some changes to how index is stored, there was a bug with index storage that took hours to figure out so progress was slower than expected
 24/09/18  20:45 22:15 Testing   Setup test_legit.pl and start to think about how to test things, work through a few issues with testing, create test00 and fix a few error message discrepancies
+25/09/18  8:45  12:00 Testing   Added several more tests cases to test subset 0, this led to uncovering some more bugs, the main one was when a file was removed which led to a number of code changes to handle that case
