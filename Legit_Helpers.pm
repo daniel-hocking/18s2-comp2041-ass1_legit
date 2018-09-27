@@ -100,12 +100,17 @@ sub commit_to_index {
 }
 
 sub validate_filename {
-  my ($file) = @_;
+  my ($file, $just_return) = @_;
   
   if(!($file =~ /^[a-z0-9]/i && $file =~ /^[a-z0-9\-_\.]+$/i)) {
-    print STDERR "$script_name: error: invalid filename '$file'\n";
-    exit 1;
+    if(! defined $just_return) {
+      print STDERR "$script_name: error: invalid filename '$file'\n";
+      exit 1;
+    } else {
+      return 0;
+    }
   }
+  return 1;
 }
 
 # necessary

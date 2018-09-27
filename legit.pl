@@ -120,7 +120,7 @@ sub add_files_to_index {
     }
     # Check file has invalid chars
     Legit_Helpers::validate_filename($file);
-    if(! defined $index{$file}) {
+    if(! defined $index{$file} || ($index{$file} ne "index" && $index{$file} == -2) || ($index{$file} eq "index" && -f $file)) {
       # Check if the file exists
       if( ! -f $file) {
         print STDERR "$script_name: error: can not open '$file'\n";
@@ -191,18 +191,19 @@ sub commit_command {
   # Check if correct arguments were provided
   my $commit_message;
   my $a_option = 0;
-  if($#ARGV == 1 && $ARGV[0] eq '-m' && $ARGV[1] =~ /^[^-]/) {
-    $commit_message = $ARGV[1];
-  } elsif($#ARGV == 2 && $ARGV[0] eq '-m' && $ARGV[1] =~ /^[^-]/ && $ARGV[2] eq '-a') {
-    $commit_message = $ARGV[1];
+  while($#ARGV >= 0 && $ARGV[0] eq '-a') {
+    shift @ARGV;
     $a_option = 1;
-  } elsif($#ARGV == 2 && $ARGV[1] eq '-m' && $ARGV[2] =~ /^[^-]/ && $ARGV[0] eq '-a') {
-    $commit_message = $ARGV[2];
+  }
+  while($#ARGV >= 0 && $ARGV[$#ARGV] eq '-a') {
+    pop @ARGV;
     $a_option = 1;
-  } else {
+  }
+  if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/) {
     print STDERR "usage: $script_name commit [-a] -m commit-message\n";
     exit 1;
   }
+  $commit_message = $ARGV[1];
 
   # Load current index into hash
   my ($commit_num, %index) = Legit_Helpers::load_index();
@@ -325,7 +326,7 @@ sub status_command {
   my ($commit_num, %index) = Legit_Helpers::load_index();
   my @dir_files = glob '"*"';
   foreach my $dir_file (@dir_files) {
-    if( ! defined $index{$dir_file}) {
+    if( ! defined $index{$dir_file} && Legit_Helpers::validate_filename($dir_file, 1)) {
       $index{$dir_file} = "untracked";
     }
   }
@@ -391,6 +392,14 @@ sub get_rm_arguments {
     }
   }
   
+  if( ! defined $arg) {
+    foreach my $remainder (@arguments) {
+      if($remainder =~ /^-/) {
+        $show_usage = 1;
+      }
+    }
+  }
+  
   if($show_usage) {
     print STDERR "usage: $script_name rm [--force] [--cached] <filenames>\n";
     exit 1;
@@ -420,6 +429,8 @@ sub rm_command {
   
   # Go through each file provided and check if its a valid file, and if not using --force option then check for differences
   foreach my $file (@all_files) {
+    Legit_Helpers::validate_filename($file);
+    
     if( ! defined $index{$file} || ($index{$file} ne "index" && $index{$file} < 0)) {
       print STDERR "$script_name: error: '$file' is not in the legit repository\n";
       exit 1;
@@ -427,11 +438,12 @@ sub rm_command {
     if($is_force == 0) {
       my $current_loc = $index{$file} eq "index" ? $commit_num : $index{$file};
       # Compare index file with previous commit
-      my $changed_prev_commit = defined $prev_commit{$file} ? compare("$commit_files_dir/$prev_commit{$file}/$file", "$commit_files_dir/$current_loc/$file") : -1;
+      my $changed_prev_commit = defined $prev_commit{$file} ? compare("$commit_files_dir/$prev_commit{$file}/$file", "$commit_files_dir/$current_loc/$file") : -2;
       # Compare index file with current directory
       my $changed_cur_dir = compare($file, "$commit_files_dir/$current_loc/$file");
       
-      if($changed_prev_commit != 0 && $changed_cur_dir != 0) {
+      if($changed_prev_commit != -2 && $changed_prev_commit != 0 && $changed_cur_dir != 0) {
+        print "$changed_prev_commit $changed_cur_dir\n" if $file eq "f";
         print STDERR "$script_name: error: '$file' in index is different to both working file and repository\n";
         exit 1;
       } elsif($changed_prev_commit == 0 && $changed_cur_dir != 0 && $is_cached == 0) {
@@ -449,7 +461,14 @@ sub rm_command {
     if($is_cached == 0) {
       unlink $file;
     }
-    $index{$file} = -2;
+    unlink "$commit_files_dir/$commit_num/$file";
+    if(defined $index{$file}) {
+      if($index{$file} eq "index") {
+        delete $index{$file};
+      } else {
+        $index{$file} = -2;
+      }
+    }
   }
   Legit_Helpers::save_index(%index);
 }
