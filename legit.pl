@@ -3,11 +3,12 @@
 use File::Copy;
 use File::Compare;
 
+use Legit_Helpers;
+
 # Setup a script name without ./
 $script_name = "legit.pl";
 # Location of files
-$index_loc = ".legit/index";
-$commit_loc = ".legit/commits";
+$commit_files_dir = ".legit/commit_files";
 # If no arguments then show usage and exit
 if($#ARGV == -1) {
   ::show_usage();
@@ -16,7 +17,7 @@ if($#ARGV == -1) {
 my $cmd = shift @ARGV;
 if(::valid_commands($cmd) == 0) {
   if(length $cmd > 0) {
-    print STDERR "$script_name: error: unknown command $cmd \n";
+    print STDERR "$script_name: error: unknown command $cmd\n";
   }
   ::show_usage();
   exit 1;
@@ -69,45 +70,6 @@ sub valid_commands {
   return defined $commands{$cmd} ? $commands{$cmd} : 0;
 }
 
-sub load_index {
-  open my $f, "<", $index_loc or (print STDERR "$script_name: error: no .legit directory containing legit repository exists\n" and exit 1);
-  my @index_lines = <$f>;
-  close $f;
-  my $commit_num = shift @index_lines;
-  chomp $commit_num;
-  my %index = ();
-  foreach my $line (@index_lines) {
-    chomp $line;
-    if($line =~ /(.+):(.+):(.+):(.*)/) {
-      @{$index{$1}} = ($2, $3, $4);
-    }
-  }
-  return ($commit_num, %index);
-}
-
-sub save_index {
-  my ($commit_num, %index) = @_;
-  
-  open my $f, ">", $index_loc or (print STDERR "$script_name: error: no .legit directory containing legit repository exists\n" and exit 1);
-  print $f "$commit_num\n";
-  foreach my $line (keys %index) {
-    my $col_2 = @{$index{$line}}[0];
-    my $col_3 = @{$index{$line}}[1];
-    my $col_4 = @{$index{$line}}[2];
-    print $f "$line:$col_2:$col_3:$col_4\n";
-  }
-  close $f;
-}
-
-sub validate_filename {
-  my ($file) = @_;
-  
-  if(!($file =~ /^[a-z0-9]/i && $file =~ /^[a-z0-9\-_\.]+$/i)) {
-    print STDERR "$script_name: error: invalid filename '$file'\n";
-    exit 1;
-  }
-}
-
 sub init_command {
   my $init_dir = ".legit";
   # Error case when more than one argument provided
@@ -122,21 +84,20 @@ sub init_command {
   }
   # Make .legit dir and an empty index file or error
   mkdir $init_dir or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
-  open my $f, ">", "$init_dir/index" or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
-  print $f "0";
-  close $f;
-  open $f, ">", "$init_dir/commits" or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
+  mkdir "$init_dir/commit_struct" or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
+  mkdir "$init_dir/commit_files" or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
+  open my $f, ">", "$init_dir/commit_struct/index" or (print STDERR "$script_name: error: could not create legit depository\n" and exit 1);
   print $f "";
   close $f;
+  my %commit_meta = (
+    "current_commit" => 0,
+  );
+  Legit_Helpers::save_commit_meta(%commit_meta);
   print "Initialized empty legit repository in $init_dir\n";
 }
 
 sub add_command {
-  # Check if have init'd yet
-  if( ! -f $index_loc) {
-    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
-    exit 1;
-  }
+  Legit_Helpers::check_init();
   
   # Check at least one file to add
   if($#ARGV < 0) {
@@ -148,7 +109,7 @@ You are not required to detect this error or produce this error message.\n";
   }
   
   # Load current index into hash
-  my ($commit_num, %index) = ::load_index();
+  my ($commit_num, %index) = Legit_Helpers::load_index();
   
   # Check if all files valid
   # Add new files to hash (this will remove dupes)
@@ -158,54 +119,56 @@ You are not required to detect this error or produce this error message.\n";
       exit 1;
     }
     # Check file has invalid chars
-    ::validate_filename($file);
+    Legit_Helpers::validate_filename($file);
     if(! defined $index{$file}) {
       # Check if the file exists
       if( ! -f $file) {
         print STDERR "$script_name: error: can not open '$file'\n";
         exit 1;
       }
-      @{$index{$file}} = ($commit_num, "-1", "-1");
+      $index{$file} = "index";
     } else {
       # If file doesn't exist then this must be a delete operation
       if( ! -f $file) {
         # Check if the file has been committed yet or just added to index
-        @commits = split(/,/, @{$index{$file}}[1]);
-        if($#commits > 0) {
-          @{$index{$file}}[0] = -$commit_num;
-        } else {
+        if($index{$file} eq "index") {
           delete $index{$file};
+        } else {
+          $index{$file} = -1;
         }
       } else {
-        @{$index{$file}}[0] = $commit_num;
+        $index{$file} = $commit_num;
       }
     }
   }
   
   # Write the hash to index, also copy files into staging area
-  ::save_index($commit_num, %index);
-  my $legit_dir = ".legit";
-  my $commit_dir = "$legit_dir/$commit_num";
+  my $prev_num = $commit_num - 1;
+  my %prev_commit;
+  %prev_commit = Legit_Helpers::load_commit_struct($prev_num) if $commit_num > 0;
+  my $commit_dir = "$commit_files_dir/$commit_num";
   if( ! -d $commit_dir) {
     mkdir $commit_dir or (print STDERR "$script_name: error: could not create commit folder\n" and exit 1);
   }
-  foreach my $line (keys %index) {
-    if(@{$index{$line}}[0] == $commit_num) {
-      my @prev_commits = split(/,/, @{$index{$line}}[1]);
-      my $prev_commit = pop @prev_commits;
-      if(! defined $prev_commit || compare($line, "$legit_dir/$prev_commit/$line") != 0) {
-        copy $line, "$commit_dir/$line";
+  foreach my $file (keys %index) {
+    if($index{$file} eq "index") {
+      copy $file, "$commit_dir/$file";
+    } elsif($index{$file} == $commit_num) {
+      if(! defined $prev_commit{$file} || compare($file, "$commit_files_dir/$prev_commit{$file}/$file") != 0) {
+        copy $file, "$commit_dir/$file";
+      } else {
+        $index{$file} = $prev_commit{$file};
+        unlink "$commit_dir/$file";
       }
+    } elsif($index{$file} == -1) {
+      unlink "$commit_dir/$file";
     }
   }
+  Legit_Helpers::save_index(%index);
 }
 
 sub commit_command {
-  # Check if index and commits files exist
-  if( ! -f $index_loc) {
-    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
-    exit 1;
-  }
+  Legit_Helpers::check_init();
   
   # Check if correct arguments were provided
   if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/) {
@@ -214,68 +177,52 @@ sub commit_command {
   }
   
   # Load current index into hash
-  my ($commit_num, %index) = ::load_index();
-  my $commit_dir = ".legit/$commit_num";
+  my ($commit_num, %index) = Legit_Helpers::load_index();
+  my $commit_dir = "$commit_files_dir/$commit_num";
   my $changes_made = 0;
   # Iterate through index files, if file has been added and has changed then commit
   foreach my $file (keys %index) {
-    if(@{$index{$file}}[0] == $commit_num && -f "$commit_dir/$file") {
-      @{$index{$file}}[1] .= ",$commit_num";
+    if($index{$file} eq "index") {
+      $index{$file} = $commit_num;
       $changes_made = 1;
-    }
-    if($commit_num > 0 && @{$index{$file}}[0] == -$commit_num) {
-      @{$index{$file}}[2] .= ",$commit_num";
+    } elsif($index{$file} == $commit_num && -f "$commit_dir/$file") {
+      $changes_made = 1;
+    } elsif($commit_num > 0 && $index{$file} == -1) {
       $changes_made = 1;
     }
   }
 
   if($changes_made == 1) {
     # Add message to commits
-    my $commit_message = $ARGV[1];
-    open my $f, ">>", $commit_loc or (print STDERR "$script_name: error: could not open commits file to save commit message\n" and exit 1);
-    print $f "$commit_num $commit_message\n";
-    close $f;
+    Legit_Helpers::add_commit_message($ARGV[1]);
     
     print "Committed as commit $commit_num\n";
-    # Update index
-    $commit_num++;
-    ::save_index($commit_num, %index);
+    # Update commit struct
+    Legit_Helpers::save_commit_struct($commit_num, %index);
+    Legit_Helpers::commit_to_index($commit_num);
   } else {
     print "nothing to commit\n";
   }
 }
 
 sub log_command {
-  # Check have init'd repository
-  if( ! -f $index_loc) {
-    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
-    exit 1;
-  }
+  Legit_Helpers::check_init();
   
-  open my $f, "<", $commit_loc or (print STDERR "$script_name: error: could not open commits file to show commit message\n" and exit 1);
-  my @lines = <$f>;
-  if($#lines == -1) {
+  my %commit_meta = Legit_Helpers::load_commit_meta();
+  if(! defined $commit_meta{"commits"}) {
     print STDERR "$script_name: error: your repository does not have any commits yet\n";
     exit 1;
   }
-  foreach my $line (reverse @lines) {
-    chomp $line;
-    if($line) {
-      print "$line\n";
-    }
+  foreach my $commit_num (sort {$b <=> $a} keys %{$commit_meta{"commits"}}) {
+    my $commit_message = $commit_meta{"commits"}{$commit_num}{"message"};
+    print "$commit_num $commit_message\n";
   }
-  close $f;
 }
 
 sub show_command {
-  # Check have init'd repository
-  if( ! -f $index_loc) {
-    print STDERR "$script_name: error: no .legit directory containing legit repository exists\n";
-    exit 1;
-  }
+  Legit_Helpers::check_init();
   
-  # Load current index into hash
-  my ($commit_num, %index) = ::load_index();
+  my $commit_num = Legit_Helpers::get_commit_num();
   if($commit_num == 0) {
     print STDERR "$script_name: error: your repository does not have any commits yet\n";
     exit 1;
@@ -301,9 +248,19 @@ sub show_command {
       }
     }
     # Check filename is valid
-    ::validate_filename($filename);
+    Legit_Helpers::validate_filename($filename);
+    
+    # Load commit struct into hash
+    my $struct_to_load = "index";
+    my $files_dir = $commit_num;
+    if(length $commit > 0) {
+      $struct_to_load = $commit;
+      $files_dir = $commit;
+    }
+    my %index = Legit_Helpers::load_commit_struct($struct_to_load);
+  
     # Check filename is in index
-    if( ! defined $index{$filename}) {
+    if( ! defined $index{$filename} || ($index{$filename} ne "index" && $index{$filename} == -1)) {
       if(length $commit > 0) {
         print STDERR "$script_name: error: '$filename' not found in commit $commit\n";
       } else {
@@ -311,49 +268,12 @@ sub show_command {
       }
       exit 1;
     } else {
-      my $prev_commit;
-      my $original_commit = $commit;
-      # Print contents of the file
-      if(length $commit > 0) {
-        if($commit != @{$index{$filename}}[0]) {
-          #my $prev_commit;
-          my @possible_commits = split(/,/, @{$index{$filename}}[1]);
-          shift @possible_commits;
-          while(defined(my $possible_commit = shift @possible_commits)) {
-            if($commit < $possible_commit) {
-              if(! defined $prev_commit) {
-                print STDERR "$script_name: error: '$filename' not found in commit $original_commit\n";
-                exit 1;
-              } else {
-                $commit = $prev_commit;
-                last;
-              }
-            } elsif($commit == $possible_commit) {
-              $prev_commit = $possible_commit;
-              last;
-            }
-            $prev_commit = $possible_commit;
-          }
-          if(defined($prev_commit) && $commit > $prev_commit) {
-            $commit = $prev_commit;
-          }
-          
-          my @remove_commits = split(/,/, @{$index{$filename}}[2]);
-          shift @remove_commits;
-          while(my $remove_commit = shift @remove_commits) {
-            if(($remove_commit == $original_commit) || ($remove_commit < $original_commit && $commit < $remove_commit)) {
-              print STDERR "$script_name: error: '$filename' not found in commit $original_commit\n";
-              exit 1;
-            }
-          }
-        }
-      } elsif(@{$index{$filename}}[0] >= 0) {
-        $commit = @{$index{$filename}}[0];
+      my $commit_dir = "$commit_files_dir/";
+      if($index{$filename} eq "index") {
+        $commit_dir .= $files_dir;
       } else {
-        print STDERR "$script_name: error: '$filename' not found in index\n";
-        exit 1;
+        $commit_dir .= $index{$filename};
       }
-      my $commit_dir = ".legit/$commit";
       open my $f, "<", "$commit_dir/$filename" or (print STDERR "$script_name: error: could not open file $filename to show contents\n" and exit 1);
       print <$f>;
       close $f;
