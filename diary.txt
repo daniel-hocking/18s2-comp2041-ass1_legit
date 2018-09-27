@@ -8,3 +8,4 @@ Date		Start	Stop	Activity 	Comments
 25/09/18  8:45  12:00 Testing   Added several more tests cases to test subset 0, this led to uncovering some more bugs, the main one was when a file was removed which led to a number of code changes to handle that case
 25/09/18  20:45 21:30 Planning  Read through spec, systematically go through reference implementation and figure out correct output for each of the subset 1 commands
 27/09/18  9:00  12:15 Refactor  Completely rework how storage of commits and index works using JSON format and overall improve code structure, split some functions into module
+27/09/18  14:00 18:00 Coding    Add subset 1 functions and do a lot of debugging to get it working as expected
