@@ -7,6 +7,8 @@ echo 1 > a
 legit.pl add a
 legit.pl add b
 legit.pl commit
+legit.pl commit -m
+legit.pl commit -m ''
 legit.pl commit -m abc
 legit.pl log
 legit.pl show
@@ -17,4 +19,5 @@ legit.pl init
 legit.pl log
 legit.pl show
 legit.pl commit
+legit.pl commit -m ''
 legit.pl commit -m abc

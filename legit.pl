@@ -199,7 +199,7 @@ sub commit_command {
     pop @ARGV;
     $a_option = 1;
   }
-  if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/) {
+  if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/ || length($ARGV[1]) == 0) {
     print STDERR "usage: $script_name commit [-a] -m commit-message\n";
     exit 1;
   }
