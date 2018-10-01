@@ -119,7 +119,7 @@ sub add_files_to_index {
   my (@all_files) = @_;
 
   # Load current index into hash
-  my ($commit_num, %index) = Legit_Helpers::load_index();
+  my ($commit_num, $prev_num, %index) = Legit_Helpers::load_index();
   %files_to_add = ();
   
   # Check if all files valid
@@ -156,7 +156,7 @@ sub add_files_to_index {
   }
   
   # Write the hash to index, also copy files into staging area
-  my $prev_num = $commit_num - 1;
+  #my $prev_num = $commit_num - 1;
   my %prev_commit;
   %prev_commit = Legit_Helpers::load_commit_struct($prev_num) if $commit_num > 0;
   my $commit_dir = "$commit_files_dir/$commit_num";
@@ -217,7 +217,7 @@ sub commit_command {
   $commit_message = $ARGV[1];
 
   # Load current index into hash
-  my ($commit_num, %index) = Legit_Helpers::load_index();
+  my ($commit_num, $prev_commit, %index) = Legit_Helpers::load_index();
   my $commit_dir = "$commit_files_dir/$commit_num";
   my $changes_made = 0;
   
@@ -335,7 +335,7 @@ sub status_command {
   Legit_Helpers::check_commits();
 
   # Load index and also get files in current dir using glob
-  my ($commit_num, %index) = Legit_Helpers::load_index();
+  my ($commit_num, $prev_num, %index) = Legit_Helpers::load_index();
   my @dir_files = glob '"*"';
   foreach my $dir_file (@dir_files) {
     if( ! defined $index{$dir_file} && Legit_Helpers::validate_filename($dir_file, 1)) {
@@ -344,7 +344,7 @@ sub status_command {
   }
   
   # Get the previous commit structure if there was one, for comparison
-  my $prev_num = $commit_num - 1;
+  #my $prev_num = $commit_num - 1;
   my %prev_commit = Legit_Helpers::load_commit_struct($prev_num);
   
   # Go through files in alphabetic order and determine status
@@ -433,10 +433,10 @@ sub rm_command {
   my ($is_cached, $is_force, @all_files) = ::get_rm_arguments(0, 0, @ARGV);
   
   # Load index into a hash
-  my ($commit_num, %index) = Legit_Helpers::load_index();
+  my ($commit_num, $prev_num, %index) = Legit_Helpers::load_index();
   
   # Get the previous commit structure if there was one, for comparison
-  my $prev_num = $commit_num - 1;
+  #my $prev_num = $commit_num - 1;
   my %prev_commit = Legit_Helpers::load_commit_struct($prev_num);
   
   # Go through each file provided and check if its a valid file, and if not using --force option then check for differences

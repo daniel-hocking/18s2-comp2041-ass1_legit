@@ -12,3 +12,4 @@ Date		Start	Stop	Activity 	Comments
 27/09/18  19:30 22:30 Testing   Add remaining test cases needed and fix a lot of small bugs along the way
 01/10/18  8:45  9:15  Testing   Further testing and uncover a new bug, also start thinking about subset 2 and how to implement
 01/10/18  9:15  11:45 Coding    Use reference implementation to create notes on subset2 and start to code up the basic parts of these functions
+01/10/18  13:45 16:00 Coding    Get the branch and checkout functions working in simple cases, though still missing some checks
