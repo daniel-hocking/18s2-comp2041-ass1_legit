@@ -11,3 +11,4 @@ Date		Start	Stop	Activity 	Comments
 27/09/18  14:00 18:00 Coding    Add subset 1 functions and do a lot of debugging to get it working as expected
 27/09/18  19:30 22:30 Testing   Add remaining test cases needed and fix a lot of small bugs along the way
 01/10/18  8:45  9:15  Testing   Further testing and uncover a new bug, also start thinking about subset 2 and how to implement
+01/10/18  9:15  11:45 Coding    Use reference implementation to create notes on subset2 and start to code up the basic parts of these functions

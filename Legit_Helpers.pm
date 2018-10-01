@@ -57,8 +57,9 @@ sub add_commit_message {
   my ($message) = @_;
   my %commit_meta = ::load_commit_meta();
   my $commit_num = $commit_meta{"current_commit"};
+  my $current_branch = $commit_meta{"current_branch"};
   $commit_meta{"current_commit"} = $commit_num + 1;
-  $commit_meta{"commits"}{$commit_num}{"message"} = $message;
+  $commit_meta{"commits"}{$current_branch}{$commit_num} = $message;
   ::save_commit_meta(%commit_meta);
 }
 

@@ -4,6 +4,7 @@ use File::Copy;
 use File::Compare;
 
 use Legit_Helpers;
+use Legit_Branch;
 
 # Setup a script name without ./
 $script_name = "legit.pl";
@@ -44,6 +45,12 @@ if($cmd eq "status") {
 if($cmd eq "rm") {
   ::rm_command();
 }
+if($cmd eq "branch") {
+  Legit_Branch::branch_command();
+}
+if($cmd eq "checkout") {
+  Legit_Branch::checkout_command();
+}
 
 sub show_usage {
   print STDERR "Usage: $script_name <command> [<args>]
@@ -74,6 +81,8 @@ sub valid_commands {
     "show" => 1,
     "status" => 1,
     "rm" => 1,
+    "branch" => 1,
+    "checkout" => 1,
   );
   return defined $commands{$cmd} ? $commands{$cmd} : 0;
 }
@@ -99,6 +108,8 @@ sub init_command {
   close $f;
   my %commit_meta = (
     "current_commit" => 0,
+    "current_branch" => "master",
+    "branches" => {"master" => "master"},
   );
   Legit_Helpers::save_commit_meta(%commit_meta);
   print "Initialized empty legit repository in $init_dir\n";
@@ -251,8 +262,9 @@ sub log_command {
   Legit_Helpers::check_commits();
   
   my %commit_meta = Legit_Helpers::load_commit_meta();
-  foreach my $commit_num (sort {$b <=> $a} keys %{$commit_meta{"commits"}}) {
-    my $commit_message = $commit_meta{"commits"}{$commit_num}{"message"};
+  my $current_branch = $commit_meta{"current_branch"};
+  foreach my $commit_num (sort {$b <=> $a} keys %{$commit_meta{"commits"}{$current_branch}}) {
+    my $commit_message = $commit_meta{"commits"}{$current_branch}{$commit_num};
     print "$commit_num $commit_message\n";
   }
 }
