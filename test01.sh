@@ -48,3 +48,11 @@ echo 1 > aaaaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_ccccccccc
 legit.pl add aaaaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc_ddddddddddddddddddddddddddddddddddddddddddddddd
 legit.pl commit -m aaaaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc_ddddddddddddddddddddddddddddddddddddddddddddddd
 legit.pl log
+echo 1 > c
+legit.pl add c
+legit.pl commit -m 'm1' -m 'm2' -m 'm3' -m 'm4'
+legit.pl log
+touch d
+legit.pl add d
+legit.pl commit -m 'n2' -m 'n1'
+legit.pl log

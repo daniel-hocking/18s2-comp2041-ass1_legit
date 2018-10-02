@@ -47,3 +47,7 @@ legit.pl add a
 legit.pl rm a --cached
 legit.pl commit -a -m 'h'
 legit.pl status
+touch a2
+legit.pl add a2
+legit.pl commit -a -a -m 'm1' -a -m 'm2' -a -a -a
+legit.pl log

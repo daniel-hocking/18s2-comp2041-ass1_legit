@@ -202,19 +202,24 @@ sub commit_command {
   # Check if correct arguments were provided
   my $commit_message;
   my $a_option = 0;
-  while($#ARGV >= 0 && $ARGV[0] eq '-a') {
-    shift @ARGV;
-    $a_option = 1;
+  while($#ARGV >= 0) {
+    if($ARGV[0] eq '-a') {
+      shift @ARGV;
+      $a_option = 1;
+    } elsif($ARGV[$#ARGV] eq '-a') {
+      pop @ARGV;
+      $a_option = 1;
+    } elsif($#ARGV >= 1 && $ARGV[1] =~ /^[^\-]/ && $ARGV[0] eq '-m') {
+      shift @ARGV;
+      $commit_message = shift @ARGV;
+    } else {
+      last;
+    }
   }
-  while($#ARGV >= 0 && $ARGV[$#ARGV] eq '-a') {
-    pop @ARGV;
-    $a_option = 1;
-  }
-  if($#ARGV != 1 || $ARGV[0] ne '-m' || $ARGV[1] =~ /^-/ || length($ARGV[1]) == 0) {
+  if($#ARGV >= 0 || ! defined $commit_message) {
     print STDERR "usage: $script_name commit [-a] -m commit-message\n";
     exit 1;
   }
-  $commit_message = $ARGV[1];
 
   # Load current index into hash
   my ($commit_num, $prev_commit, %index) = Legit_Helpers::load_index();
