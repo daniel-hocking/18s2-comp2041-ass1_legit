@@ -1,5 +1,3 @@
-Don't push changes to this repository directly.
+legit.pl is a vastly simplified implementation of Git.
 
-Don't change the repository via the web interface
-
-Submit your work using give, and it will be automatically pushed to this repository.
+Usage is very similar to Git as the commands are named in the same way, though not all Git commands have been implemented.
